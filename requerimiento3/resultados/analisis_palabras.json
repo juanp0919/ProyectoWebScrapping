@@ -1,0 +1,114 @@
+{
+  "palabras_tfidf": [
+    {
+      "palabra": "intelligence",
+      "score_tfidf": 0.04845890913387517,
+      "docs_aparicion": 792,
+      "freq_relativa": 0.9198606271777003,
+      "score_combinado": 0.3098794245470227
+    },
+    {
+      "palabra": "artificial",
+      "score_tfidf": 0.04832293397256143,
+      "docs_aparicion": 789,
+      "freq_relativa": 0.9163763066202091,
+      "score_combinado": 0.30873894576685573
+    },
+    {
+      "palabra": "artificial_intelligence",
+      "score_tfidf": 0.04699934644409582,
+      "docs_aparicion": 788,
+      "freq_relativa": 0.9152148664343787,
+      "score_combinado": 0.30746400244118066
+    },
+    {
+      "palabra": "artificial intelligence",
+      "score_tfidf": 0.04699934644409582,
+      "docs_aparicion": 788,
+      "freq_relativa": 0.9152148664343787,
+      "score_combinado": 0.30746400244118066
+    },
+    {
+      "palabra": "generative",
+      "score_tfidf": 0.04808039231974819,
+      "docs_aparicion": 541,
+      "freq_relativa": 0.6283391405342624,
+      "score_combinado": 0.22215801678410246
+    },
+    {
+      "palabra": "model",
+      "score_tfidf": 0.048751586298569106,
+      "docs_aparicion": 405,
+      "freq_relativa": 0.47038327526132406,
+      "score_combinado": 0.1752410929873956
+    },
+    {
+      "palabra": "potential",
+      "score_tfidf": 0.03884848877028913,
+      "docs_aparicion": 384,
+      "freq_relativa": 0.445993031358885,
+      "score_combinado": 0.1609918515468679
+    },
+    {
+      "palabra": "application",
+      "score_tfidf": 0.04074189181202016,
+      "docs_aparicion": 346,
+      "freq_relativa": 0.40185830429732866,
+      "score_combinado": 0.1490768155576127
+    },
+    {
+      "palabra": "challenge",
+      "score_tfidf": 0.038052194349811004,
+      "docs_aparicion": 341,
+      "freq_relativa": 0.39605110336817656,
+      "score_combinado": 0.14545186705532068
+    },
+    {
+      "palabra": "generative_artificial",
+      "score_tfidf": 0.03141782578959492,
+      "docs_aparicion": 334,
+      "freq_relativa": 0.3879210220673635,
+      "score_combinado": 0.1383687846729255
+    },
+    {
+      "palabra": "generative artificial",
+      "score_tfidf": 0.03141782578959492,
+      "docs_aparicion": 334,
+      "freq_relativa": 0.3879210220673635,
+      "score_combinado": 0.1383687846729255
+    },
+    {
+      "palabra": "generative_artificial artificial_intelligence",
+      "score_tfidf": 0.03137014572165305,
+      "docs_aparicion": 334,
+      "freq_relativa": 0.3879210220673635,
+      "score_combinado": 0.1383354086253662
+    },
+    {
+      "palabra": "learning",
+      "score_tfidf": 0.04152251322298396,
+      "docs_aparicion": 308,
+      "freq_relativa": 0.35772357723577236,
+      "score_combinado": 0.13638283242682048
+    },
+    {
+      "palabra": "technology",
+      "score_tfidf": 0.03777962671027705,
+      "docs_aparicion": 314,
+      "freq_relativa": 0.36469221835075494,
+      "score_combinado": 0.1358534042024204
+    },
+    {
+      "palabra": "analysis",
+      "score_tfidf": 0.03509252735502565,
+      "docs_aparicion": 313,
+      "freq_relativa": 0.3635307781649245,
+      "score_combinado": 0.1336240025979953
+    }
+  ],
+  "metricas_precision": {
+    "precision": 0.06666666666666667,
+    "recall": 0.06666666666666667,
+    "f1_score": 0.06666666666666667
+  }
+}
