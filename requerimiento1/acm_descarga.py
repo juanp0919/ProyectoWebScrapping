@@ -4,31 +4,14 @@
 import os
 import time
 import glob
-import undetected_chromedriver as uc
+
+from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
-
-
-def _chrome_major_version() -> int | None:
-    """Detecta la versión mayor de Chrome instalada (Windows)."""
-    try:
-        import winreg
-        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-            for key_path in (
-                r"SOFTWARE\\Google\\Chrome\\BLBeacon",
-                r"SOFTWARE\\WOW6432Node\\Google\\Chrome\\BLBeacon",
-            ):
-                try:
-                    key = winreg.OpenKey(hive, key_path)
-                    version, _ = winreg.QueryValueEx(key, "version")
-                    return int(str(version).split(".")[0])
-                except OSError:
-                    continue
-    except Exception:
-        pass
-    return None
+from selenium.common.exceptions import TimeoutException
 
 
 class ACMDescarga:
@@ -39,14 +22,20 @@ class ACMDescarga:
     """
 
     def __init__(self):
-        # Carpeta de descargas (relativa al archivo)
+        # Carpeta de descargas (relativa a este archivo)
         self.download_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "descargas", "acm")
         )
         os.makedirs(self.download_dir, exist_ok=True)
 
-        # Configuración de Chrome (UC)
-        options = uc.ChromeOptions()
+        # ==== Selenium Chrome/Chromium (SIN undetected_chromedriver) ====
+        chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
+        chromedriver_path = os.environ.get("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
+
+        options = Options()
+        options.binary_location = chrome_bin
+
+        # Preferencias de descarga
         prefs = {
             "download.default_directory": self.download_dir,
             "download.prompt_for_download": False,
@@ -55,21 +44,22 @@ class ACMDescarga:
             "profile.default_content_settings.popups": 0,
         }
         options.add_experimental_option("prefs", prefs)
-        options.add_argument("--start-maximized")
-        options.add_argument("--disable-blink-features=AutomationControlled")
 
-        # Headless opcional
-        if os.getenv("ACM_HEADLESS", "0") == "1":
+        # Flags recomendadas para contenedores/headless
+        if os.getenv("ACM_HEADLESS", "1") == "1":
             options.add_argument("--headless=new")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--ignore-certificate-errors")
 
-        # Detectar versión de Chrome instalada y fijarla
-        major = _chrome_major_version() or 141
-        print(f"🧭 Detectada versión de Chrome local: {major}")
-        self.driver = uc.Chrome(options=options, version_main=major)
+        service = Service(executable_path=chromedriver_path)
+        self.driver = webdriver.Chrome(service=service, options=options)
 
-        # Snapshot de .bib existentes
+        # Snapshot de .bib existentes antes de iniciar
         self._bib_previos = set(
             f for f in os.listdir(self.download_dir) if f.lower().endswith(".bib")
         )
@@ -146,8 +136,10 @@ class ACMDescarga:
         )
         self._js_click(acm_link)
 
+        # Cambiar a nueva pestaña
         self.driver.switch_to.window(self.driver.window_handles[-1])
 
+        # Búsqueda
         search_box = self._wait_presence(By.NAME, "AllField", 25, "caja de búsqueda")
         search_box.clear()
         search_box.send_keys('"generative artificial intelligence"')
