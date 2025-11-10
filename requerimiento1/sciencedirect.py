@@ -3,35 +3,18 @@
 # -*- coding: utf-8 -*-
 
 import os, time, glob, urllib.parse, random
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver import ActionChains
-from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
 from dotenv import load_dotenv
 
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
+
 load_dotenv()
-
-
-def _chrome_major_version() -> int | None:
-    """Obtiene la versión mayor de Chrome instalada (Windows)."""
-    try:
-        import winreg
-        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-            for key_path in (
-                r"SOFTWARE\\Google\\Chrome\\BLBeacon",
-                r"SOFTWARE\\WOW6432Node\\Google\\Chrome\\BLBeacon",
-            ):
-                try:
-                    key = winreg.OpenKey(hive, key_path)
-                    version, _ = winreg.QueryValueEx(key, "version")
-                    return int(str(version).split(".")[0])
-                except OSError:
-                    continue
-    except Exception:
-        pass
-    return None
 
 
 class ScienceDirectDescarga:
@@ -131,7 +114,7 @@ class ScienceDirectDescarga:
                 return int(qs["offset"][0])
         except Exception:
             pass
-        # Deducción por pager
+        # Deducción por pager en el DOM
         try:
             txt = self.driver.find_element(By.CSS_SELECTOR, "ol#srp-pagination").text
             parts = txt.split()  # "Page 12 of 64"
@@ -148,9 +131,14 @@ class ScienceDirectDescarga:
         # Conservamos proxy y show
         return f"https://www-sciencedirect-com.crai.referencistas.com/search?qs={q}&show={self.per_page}&offset={offset}"
 
-    # -------------------- config --------------------
+    # -------------------- config (Selenium "normal") --------------------
     def _configurar_chrome(self):
-        opts = uc.ChromeOptions()
+        chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
+        chromedriver_path = os.environ.get("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
+
+        opts = Options()
+        opts.binary_location = chrome_bin
+
         prefs = {
             "download.default_directory": self.download_dir,
             "download.prompt_for_download": False,
@@ -160,21 +148,31 @@ class ScienceDirectDescarga:
             "profile.default_content_setting_values.automatic_downloads": 1,
         }
         opts.add_experimental_option("prefs", prefs)
-        opts.add_argument("--start-maximized")
-        opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_argument("--disable-popup-blocking")
+
+        # Flags recomendadas para contenedores/headless
+        if os.getenv("SD_HEADLESS", "1") == "1":
+            opts.add_argument("--headless=new")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
-        if os.getenv("SD_HEADLESS", "0") == "1":
-            opts.add_argument("--headless=new")
+        opts.add_argument("--disable-gpu")
+        opts.add_argument("--disable-extensions")
+        opts.add_argument("--window-size=1920,1080")
+        opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_argument("--disable-popup-blocking")
+        opts.add_argument("--ignore-certificate-errors")
 
-        major = _chrome_major_version() or 141
-        print(f"🧭 Detectada versión de Chrome local: {major}")
-        drv = uc.Chrome(options=opts, version_main=major)
+        service = Service(executable_path=chromedriver_path)
+        drv = webdriver.Chrome(service=service, options=opts)
+
+        # Intento de habilitar descargas en headless (algunos builds lo requieren)
         try:
-            drv.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": self.download_dir})
+            drv.execute_cdp_cmd(
+                "Page.setDownloadBehavior",
+                {"behavior": "allow", "downloadPath": self.download_dir},
+            )
         except Exception:
             pass
+
         return drv
 
     # -------------------- navegación/login --------------------
