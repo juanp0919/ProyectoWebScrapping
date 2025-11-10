@@ -1,0 +1,13 @@
+chromium
+chromium-driver
+libglib2.0-0
+libnss3
+libgconf-2-4
+libfontconfig1
+libxrender1
+libxcomposite1
+libasound2
+libatk1.0-0
+libatk-bridge2.0-0
+libgbm1
+libgtk-3-0
