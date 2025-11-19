@@ -59,25 +59,58 @@ def cargar_bib(bib_path: str) -> Any:
 
 def _country_map_variants() -> Dict[str, str]:
     """
-    Devuelve un mapa: nombre de país (minúsculas, variantes) -> código ISO-3.
-    Se agregan alias comunes (USA, UK, etc.) y versiones sin acentos.
+    Devuelve un mapa: variante de nombre / código de país (minúsculas)
+    -> código ISO-3.
+
+    Incluye:
+    - name, official_name, common_name
+    - versiones sin acento
+    - códigos alpha_2 (us, es, fr)
+    - códigos alpha_3 (usa, esp, fra)
+    - alias comunes (USA, UK, etc.)
     """
     mapping: Dict[str, str] = {}
+
     for c in pycountry.countries:
-        names = {c.name}
+        names = set()
+
+        # Nombres base
+        names.add(c.name)
         for attr in ("official_name", "common_name"):
             if hasattr(c, attr):
                 names.add(getattr(c, attr))
-        # variantes sin acento
-        for n in list(names):
-            names.add(unidecode(n))
-        # alias típicos
-        if c.alpha_2 == "US":
-            names.update({"United States", "USA", "U.S.A", "Estados Unidos"})
-        if c.alpha_2 == "GB":
-            names.update({"United Kingdom", "UK", "U.K.", "Reino Unido", "Great Britain"})
+
+        # Versiones normalizadas (sin acento, minúsculas)
+        norm_names = set()
         for n in names:
-            mapping[n.lower()] = c.alpha_3
+            norm_names.add(unidecode(n).lower())
+
+        # Códigos ISO
+        norm_names.add(c.alpha_2.lower())
+        norm_names.add(c.alpha_3.lower())
+
+        # Alias manuales para algunos países comunes
+        if c.alpha_2 == "US":
+            norm_names.update({
+                "usa", "u.s.a", "united states", "united states of america",
+                "estados unidos", "u.s.", "us"
+            })
+        if c.alpha_2 == "GB":
+            norm_names.update({
+                "uk", "u.k.", "united kingdom", "great britain",
+                "reino unido", "gb"
+            })
+        if c.alpha_2 == "ES":
+            norm_names.update({"spain", "espana", "españa"})
+        if c.alpha_2 == "DE":
+            norm_names.update({"germany", "alemania"})
+        if c.alpha_2 == "FR":
+            norm_names.update({"france", "francia"})
+
+        # Rellenar mapping
+        for n in norm_names:
+            mapping[n] = c.alpha_3
+
     return mapping
 
 
@@ -96,23 +129,61 @@ def _safe_year(entry: Dict[str, Any]) -> int | None:
 
 def _infer_pais_primer_autor(entry: Dict[str, Any]) -> str:
     """
-    Heurística: busca nombres de países en affiliation/address/author/note.
+    Heurística mejorada:
+    1) Busca códigos/nombres de país en campos de afiliación / dirección.
+    2) Luego en author / note.
+    3) Soporta nombres, alias y códigos ISO-2/ISO-3.
+
     Retorna ISO-3; 'UNK' si no se detecta.
     """
-    for key in ("affiliation", "affiliations", "address", "affiliation_country"):
-        txt = entry.get(key, "")
-        if txt:
-            t = unidecode(txt).lower()
-            for name_lc, iso3 in _COUNTRY_MAP.items():
-                if name_lc in t:
-                    return iso3
-    for key in ("author", "note"):
-        txt = entry.get(key, "")
-        if txt:
-            t = unidecode(txt).lower()
-            for name_lc, iso3 in _COUNTRY_MAP.items():
-                if name_lc in t:
-                    return iso3
+    # Campos donde es más probable encontrar el país
+    primary_fields = (
+        "affiliation_country",
+        "country",
+        "affiliation",
+        "affiliations",
+        "address",
+        "institution",
+        "school",
+        "organization",
+        "publisher",
+        "location",
+    )
+    secondary_fields = ("author", "note")
+
+    def _buscar_en_texto(txt: str) -> str | None:
+        if not txt:
+            return None
+        t = unidecode(txt).lower()
+
+        # 1) Primero por tokens exactos (códigos, nombres cortos)
+        tokens = re.split(r"[^a-zA-Z]+", t)
+        for tok in tokens:
+            if not tok:
+                continue
+            iso = _COUNTRY_MAP.get(tok)
+            if iso:
+                return iso
+
+        # 2) Después por nombres compuestos (united states, reino unido…)
+        for name_lc, iso3 in _COUNTRY_MAP.items():
+            if " " in name_lc and name_lc in t:
+                return iso3
+
+        return None
+
+    # Buscar en campos principales
+    for key in primary_fields:
+        iso = _buscar_en_texto(entry.get(key, ""))
+        if iso:
+            return iso
+
+    # Buscar en campos secundarios (menos fiables)
+    for key in secondary_fields:
+        iso = _buscar_en_texto(entry.get(key, ""))
+        if iso:
+            return iso
+
     return "UNK"
 
 
@@ -129,7 +200,12 @@ def construir_mapa_paises(bib_db: Any):
         rows.append({"iso3": iso3})
     df = pd.DataFrame(rows)
     if df.empty:
-        fig = px.choropleth(locations=[], locationmode="ISO-3", color=[], title="Mapa por país (sin datos)")
+        fig = px.choropleth(
+            locations=[],
+            locationmode="ISO-3",
+            color=[],
+            title="Mapa por país (sin datos)"
+        )
         return fig, df
 
     conteos = df.value_counts("iso3").reset_index(name="count")
@@ -149,16 +225,17 @@ def construir_mapa_paises(bib_db: Any):
 # ------------------------ 2) Nube de palabras ------------------------
 
 _ES_STOP = {
-    "de","la","que","el","en","y","a","los","del","se","las","por","un","para","con","no",
-    "una","su","al","lo","como","mas","pero","sus","le","ya","o","este","si","porque","esta",
-    "entre","cuando","muy","sin","sobre","tambien","me","hasta","hay","donde","quien","desde",
+    "de", "la", "que", "el", "en", "y", "a", "los", "del", "se", "las", "por", "un", "para", "con", "no",
+    "una", "su", "al", "lo", "como", "mas", "pero", "sus", "le", "ya", "o", "este", "si", "porque", "esta",
+    "entre", "cuando", "muy", "sin", "sobre", "tambien", "me", "hasta", "hay", "donde", "quien", "desde",
 }
 _EN_MORE = {
-    "we","our","they","these","those","using","use","used","results","result","paper","study",
-    "approach","based","within","across","among","show","shown","however","therefore","method",
-    "methods","conclusion","conclusions","introduction","discussion"
+    "we", "our", "they", "these", "those", "using", "use", "used", "results", "result", "paper", "study",
+    "approach", "based", "within", "across", "among", "show", "shown", "however", "therefore", "method",
+    "methods", "conclusion", "conclusions", "introduction", "discussion"
 }
 STOP_COMBINED = (set(STOPWORDS) | _ES_STOP | _EN_MORE)
+
 
 def _texto_abstracts_keywords(bib_db: Any) -> str:
     texts: List[str] = []
@@ -225,11 +302,19 @@ def construir_timeline(bib_db: Any):
     df_rev_plot = df_rev[df_rev["journal"].isin(top_revistas)]
 
     fig2 = px.line(
-        df_rev_plot, x="year", y="count", color="journal", markers=True,
-        title="Publicaciones por año y por revista (Top 10 revistas)"
+        df_rev_plot,
+        x="year",
+        y="count",
+        color="journal",
+        markers=True,
+        title="Publicaciones por año y por revista (Top 10 revistas)",
     )
-    fig2.update_layout(xaxis_title="Año", yaxis_title="# publicaciones", legend_title="Revista",
-                       margin=dict(l=10, r=10, t=60, b=10))
+    fig2.update_layout(
+        xaxis_title="Año",
+        yaxis_title="# publicaciones",
+        legend_title="Revista",
+        margin=dict(l=10, r=10, t=60, b=10),
+    )
     return fig1, fig2, df_anual, df_rev
 
 
@@ -269,8 +354,15 @@ def exportar_pdf(fig_mapa, img_nube: Image.Image, fig_line1, fig_line2, out_pdf_
         c.drawString(40, H - 40, title)
         img = ImageReader(io.BytesIO(png_bytes))
         margin = 30
-        c.drawImage(img, margin, 60, width=W - 2 * margin, height=H - 120,
-                    preserveAspectRatio=True, anchor='c')
+        c.drawImage(
+            img,
+            margin,
+            60,
+            width=W - 2 * margin,
+            height=H - 120,
+            preserveAspectRatio=True,
+            anchor="c",
+        )
         c.showPage()
 
     _draw("Mapa por país del primer autor", mapa_png)
@@ -291,8 +383,10 @@ def render_req5(bib_path: str = "requerimiento1/descargas/resultado_unificado.bi
     """
     import streamlit as st
 
-    st.markdown("Esta sección muestra **mapa**, **nube de palabras** y **líneas temporales** "
-                "a partir del archivo unificado `.bib`.")
+    st.markdown(
+        "Esta sección muestra **mapa**, **nube de palabras** y **líneas temporales** "
+        "a partir del archivo unificado `.bib`."
+    )
 
     # Parámetros simples (puedes ampliar si quieres)
     col_cfg1, col_cfg2 = st.columns(2)
@@ -305,8 +399,10 @@ def render_req5(bib_path: str = "requerimiento1/descargas/resultado_unificado.bi
     try:
         bib = cargar_bib(bib_path)
     except FileNotFoundError:
-        st.error(f"No se encontró el archivo BibTeX en `{bib_path}`. "
-                 "Completa primero el scraping/unificación o ajusta la ruta.")
+        st.error(
+            f"No se encontró el archivo BibTeX en `{bib_path}`. "
+            "Completa primero el scraping/unificación o ajusta la ruta."
+        )
         return
 
     # Construcciones
